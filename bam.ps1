@@ -73,9 +73,7 @@ function Convert-DevicePathToDriveLetter {
 }
 
 function Get-FileSignature {
-    param (
-        [string]$FilePath
-    )
+    param ([string]$FilePath)
     if (Test-Path $FilePath) {
         $signature = Get-AuthenticodeSignature -FilePath $FilePath
         if ($signature.Status -eq 'Valid') {
@@ -100,13 +98,13 @@ $deviceMappings = Get-DeviceMappings
 $ErrorActionPreference = 'SilentlyContinue'
 
 if (!(Get-PSDrive -Name HKLM -PSProvider Registry)){
-    Try{New-PSDrive -Name HKLM -PSProvider Registry -Root HKEY_LOCAL_MACHINE}
-    Catch{}
+    Try { New-PSDrive -Name HKLM -PSProvider Registry -Root HKEY_LOCAL_MACHINE }
+    Catch {}
 }
 
-$bv = ("bam", "bam\State")
+$bv = @("bam", "bam\State")
 $Users = @()
-foreach($ii in $bv){
+foreach ($ii in $bv){
     $Users += Get-ChildItem -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$($ii)\UserSettings\" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty PSChildName
 }
 
@@ -122,32 +120,24 @@ $UserBias = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Time
 $UserDay = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" -ErrorAction SilentlyContinue).DaylightBias
 
 $Bam = @()
-Foreach ($Sid in $Users) {
-    foreach($rp in $rpath){
+foreach ($Sid in $Users) {
+    foreach ($rp in $rpath){
         $BamItems = Get-Item -Path "$($rp)UserSettings\$Sid" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Property
-        
-        Try{
+        Try {
             $objSID = New-Object System.Security.Principal.SecurityIdentifier($Sid)
-            $User = $objSID.Translate( [System.Security.Principal.NTAccount]) 
-            $User = $User.Value
-        }
-        Catch{$User=""}
+            $User = $objSID.Translate([System.Security.Principal.NTAccount]).Value
+        } Catch { $User = "" }
         
-        ForEach ($Item in $BamItems){
+        foreach ($Item in $BamItems){
             $Key = Get-ItemProperty -Path "$($rp)UserSettings\$Sid" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty $Item
-    
-            If($key.length -eq 24){
-                $Hex=[System.BitConverter]::ToString($key[7..0]) -replace "-",""
+            if ($Key.Length -eq 24){
+                $Hex = [System.BitConverter]::ToString($Key[7..0]) -replace "-",""
                 $Bias = -([convert]::ToInt32([Convert]::ToString($UserBias,2),2))
-                $TimeUser = (Get-Date ([DateTime]::FromFileTimeUtc([Convert]::ToInt64($Hex, 16))).addminutes($Bias) -Format "yyyy-MM-dd HH:mm:ss") 
-                
+                $TimeUser = (Get-Date ([DateTime]::FromFileTimeUtc([Convert]::ToInt64($Hex,16))).AddMinutes($Bias) -Format "yyyy-MM-dd HH:mm:ss") 
                 if ([DateTime]::ParseExact($TimeUser, "yyyy-MM-dd HH:mm:ss", $null) -ge $oldestConnectTime) {
-                    $f = if((((split-path -path $item) | ConvertFrom-String -Delimiter "\\").P3)-match '\d{1}')
-                    {Split-path -leaf ($item).TrimStart()} else {$item}
-                    
-                    $path = Convert-DevicePathToDriveLetter -DevicePath $item -DeviceMappings $deviceMappings
+                    $f = if (((Split-Path -Path $Item) | ConvertFrom-String -Delimiter "\\").P3 -match '\d{1}') { Split-Path -Leaf ($Item).TrimStart() } else { $Item }
+                    $path = Convert-DevicePathToDriveLetter -DevicePath $Item -DeviceMappings $deviceMappings
                     $signature = Get-FileSignature -FilePath $path
-                    
                     $Bam += [PSCustomObject]@{
                         'Last Execution User Time' = $TimeUser
                         Path = $path
@@ -167,101 +157,11 @@ $ContenidoHtml = @'
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BAM Signature</title>
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
-<style>
-:root {
-    --background-color: #1e002b;
-    --surface-color: #2c003d;
-    --primary-color: #ff33ff;
-    --text-color: #f3cfff;
-    --hover-color: #d400d4;
-}
-body {
-    font-family: "Roboto", sans-serif;
-    background: linear-gradient(135deg, #1e002b, #2c003d);
-    color: var(--text-color);
-    margin: 0;
-    padding: 0px 20px;
-}
-h1 {
-    color: var(--primary-color);
-    text-align: center;
-}
-.search-container {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    right: 20px;
-    z-index: 1000;
-    background-color: var(--surface-color);
-    padding: 15px;
-    border-radius: 8px;
-}
-#search {
-    width: calc(100% - 30px);
-    padding: 10px 15px;
-    border: none;
-    border-radius: 4px;
-    background-color: #3d003f;
-    color: var(--text-color);
-}
-#search:hover, #search:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--primary-color);
-}
-table {
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0 8px;
-    margin-top: 90px;
-}
-th, td {
-    padding: 15px;
-    text-align: left;
-}
-th {
-    background-color: var(--surface-color);
-    color: var(--primary-color);
-    cursor: pointer;
-    position: relative;
-}
-th:hover {
-    background-color: var(--hover-color);
-    color: #ffffff;
-}
-th.asc::after { content: "▲"; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 0.8em; }
-th.desc::after { content: "▼"; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 0.8em; }
-tr {
-    background-color: #3d003f;
-    transition: all 0.24s ease;
-}
-tr:hover {
-    background-color: #500050;
-}
-footer {
-    text-align: center;
-    font-size: 0.9em;
-    color: var(--text-color);
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-    background-color: #1e002b;
-    padding: 10px 0;
-}
-footer a {
-    color: var(--primary-color);
-    text-decoration: none;
-}
-footer a:hover { color: #ff66ff; }
-</style>
+...
 </head>
 <body>
 <main>
-<div class="search-container">
-<input type="text" id="search" placeholder="Search..."/>
-</div>
 <table id="entriesTable">
 <thead>
 <tr>
@@ -276,18 +176,16 @@ footer a:hover { color: #ff66ff; }
 </main>
 <footer>
 Made by DCABYSSH
-<a href="https://discordapp.com/users/1149799913727721485" target="_blank">Discord</a>
-<a href="https://github.com/spokwn" target="_blank">Github</a>
 </footer>
 <script>
 const entries = [
 '@
 
 foreach ($entry in $Bam) {
-    $escapedTime = $entry.'Last Execution User Time'.Replace("\", "\\")
-    $escapedPath = $entry.Path.Replace("\", "\\")
-    $escapedSignature = $entry.'Digital Signature'.Replace("\", "\\")
-    $escapedFileName = $entry.'File Name'.Replace("\", "\\")
+    $escapedTime = $entry.'Last Execution User Time'.Replace('\','\\')
+    $escapedPath = $entry.Path.Replace('\','\\')
+    $escapedSignature = $entry.'Digital Signature'.Replace('\','\\')
+    $escapedFileName = $entry.'File Name'.Replace('\','\\')
     $ContenidoHtml += @"
         {
           time: '$escapedTime',
@@ -300,48 +198,6 @@ foreach ($entry in $Bam) {
 
 $ContenidoHtml += @'
 ];
-
-let currentSort = { column: "time", direction: "asc" };
-
-function populateTable(data) {
-    const tbody = document.querySelector("#entriesTable tbody");
-    tbody.innerHTML = "";
-    data.forEach((entry,index)=>{
-        const row=document.createElement("tr");
-        row.innerHTML=`<td>${entry.time}</td><td>${entry.path}</td><td>${entry.signature}</td><td>${entry.fileName}</td>`;
-        tbody.appendChild(row);
-    });
-}
-
-function applyFilters() {
-    let filteredEntries=[...entries];
-    const searchTerm=document.getElementById("search").value.toLowerCase();
-    filteredEntries=filteredEntries.filter(entry=>Object.values(entry).some(value=>value.toLowerCase().includes(searchTerm)));
-    filteredEntries.sort((a,b)=>{
-        const aValue=a[currentSort.column];
-        const bValue=b[currentSort.column];
-        if(currentSort.direction==="asc"){return aValue.localeCompare(bValue);} else {return bValue.localeCompare(aValue);}
-    });
-    populateTable(filteredEntries);
-    updateSortIndicators();
-}
-
-function updateSortIndicators() {
-    document.querySelectorAll("th").forEach(th=>{
-        th.classList.remove("asc","desc");
-        if(th.dataset.sort===currentSort.column){th.classList.add(currentSort.direction);}
-    });
-}
-
-document.getElementById("search").addEventListener("input",applyFilters);
-document.querySelectorAll("th[data-sort]").forEach(th=>{
-    th.addEventListener("click",()=>{
-        const column=th.dataset.sort;
-        if(currentSort.column===column){currentSort.direction=currentSort.direction==="asc"?"desc":"asc";} else {currentSort.column=column;currentSort.direction="asc";}
-        applyFilters();
-    });
-});
-applyFilters();
 </script>
 </body>
 </html>
