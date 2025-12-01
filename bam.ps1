@@ -1,17 +1,16 @@
 cls
-cls
 
 Write-Host ""
 Write-Host @"
 ▄████▄   ██▓    ▓█████ ▄▄▄       ██▀███       ██████   ██████ 
-▒██▀ ▀█  ▓██▒    ▓█   ▀▒████▄    ▓██ ▒ ██▒   ▒██    ▒ ▒██    ▒         
-▒▓█    ▄ ▒██░    ▒███  ▒██  ▀█▄  ▓██ ░▄█ ▒   ░ ▓██▄   ░ ▓██▄           
-▒▓▓▄ ▄██▒▒██░    ▒▓█  ▄░██▄▄▄▄██ ▒██▀▀█▄       ▒   ██▒  ▒   ██▒        
+▒██▀ ▀█  ▓██▒    ▓█   ▀▒████▄    ▓██ ▒ ██▒   ▒██    ▒ ▒██    ▒ 
+▒▓█    ▄ ▒██░    ▒███  ▒██  ▀█▄  ▓██ ░▄█ ▒   ░ ▓██▄   ░ ▓██▄   
+▒▓▓▄ ▄██▒▒██░    ▒▓█  ▄░██▄▄▄▄██ ▒██▀▀█▄       ▒   ██▒  ▒   ██▒
 ▒ ▓███▀ ░░██████▒░▒████▒▓█   ▓██▒░██▓ ▒██▒   ▒██████▒▒▒██████▒▒
 ░ ░▒ ▒  ░░ ▒░▓  ░░░ ▒░ ░▒▒   ▓▒█░░ ▒▓ ░▒▓░   ▒ ▒▓▒ ▒ ░▒ ▒▓▒ ▒ ░
 ░  ▒   ░ ░ ▒  ░ ░ ░  ░ ▒   ▒▒ ░  ░▒ ░ ▒░   ░ ░▒  ░ ░░ ░▒  ░ ░
 ░          ░ ░      ░    ░   ▒     ░░   ░    ░  ░  ░  ░  ░  
-░ ░          ░  ░   ░  ░     ░  ░   ░              ░        ░  
+░ ░          ░  ░   ░  ░     ░  ░   ░              ░        ░   
 "@ -ForegroundColor Magenta
 Write-Host ""
 Write-Host "                                                                                           made by DCABYSSH"
@@ -19,8 +18,8 @@ Write-Host ""
 
 if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))  
 {  
-    Write-Warning "This script requires Administrator privileges. Please run as Administrator."
-    exit
+  Write-Warning "This script requires Administrator privileges. Please run as Administrator."
+  exit
 }
 
 function Get-OldestConnectTime {
@@ -117,6 +116,7 @@ if ($Users.Count -eq 0) {
 }
 
 $rpath = @("HKLM:\SYSTEM\CurrentControlSet\Services\bam\","HKLM:\SYSTEM\CurrentControlSet\Services\bam\state\")
+
 $UserTime = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" -ErrorAction SilentlyContinue).TimeZoneKeyName
 $UserBias = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" -ErrorAction SilentlyContinue).ActiveTimeBias
 $UserDay = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" -ErrorAction SilentlyContinue).DaylightBias
@@ -125,23 +125,29 @@ $Bam = @()
 Foreach ($Sid in $Users) {
     foreach($rp in $rpath){
         $BamItems = Get-Item -Path "$($rp)UserSettings\$Sid" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Property
+        
         Try{
             $objSID = New-Object System.Security.Principal.SecurityIdentifier($Sid)
-            $User = $objSID.Translate([System.Security.Principal.NTAccount]) 
+            $User = $objSID.Translate( [System.Security.Principal.NTAccount]) 
             $User = $User.Value
         }
         Catch{$User=""}
+        
         ForEach ($Item in $BamItems){
             $Key = Get-ItemProperty -Path "$($rp)UserSettings\$Sid" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty $Item
+    
             If($key.length -eq 24){
                 $Hex=[System.BitConverter]::ToString($key[7..0]) -replace "-",""
                 $Bias = -([convert]::ToInt32([Convert]::ToString($UserBias,2),2))
                 $TimeUser = (Get-Date ([DateTime]::FromFileTimeUtc([Convert]::ToInt64($Hex, 16))).addminutes($Bias) -Format "yyyy-MM-dd HH:mm:ss") 
+                
                 if ([DateTime]::ParseExact($TimeUser, "yyyy-MM-dd HH:mm:ss", $null) -ge $oldestConnectTime) {
                     $f = if((((split-path -path $item) | ConvertFrom-String -Delimiter "\\").P3)-match '\d{1}')
                     {Split-path -leaf ($item).TrimStart()} else {$item}
+                    
                     $path = Convert-DevicePathToDriveLetter -DevicePath $item -DeviceMappings $deviceMappings
                     $signature = Get-FileSignature -FilePath $path
+                    
                     $Bam += [PSCustomObject]@{
                         'Last Execution User Time' = $TimeUser
                         Path = $path
@@ -156,28 +162,107 @@ Foreach ($Sid in $Users) {
 
 $ErrorActionPreference = 'Continue'
 
-# HTML here-string corretto
 $ContenidoHtml = @'
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BAM Signature</title>
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
 <style>
-:root { --background-color: #121212; --surface-color: #1e1e1e; --primary-color: #64b5f6; --text-color: #e0e0e0; --hover-color: #2196f3; }
-body { font-family: "Roboto", sans-serif; background-color: var(--background-color); color: var(--text-color); margin: 0; padding: 0px 20px; transition: all 0.1s ease; }
-h1 { color: var(--primary-color); text-align: center; margin-bottom: 30px; font-weight: 300; font-size: 2.5em; }
-...
+:root {
+    --background-color: #1e002b;
+    --surface-color: #2c003d;
+    --primary-color: #ff33ff;
+    --text-color: #f3cfff;
+    --hover-color: #d400d4;
+}
+body {
+    font-family: "Roboto", sans-serif;
+    background: linear-gradient(135deg, #1e002b, #2c003d);
+    color: var(--text-color);
+    margin: 0;
+    padding: 0px 20px;
+}
+h1 {
+    color: var(--primary-color);
+    text-align: center;
+}
+.search-container {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    z-index: 1000;
+    background-color: var(--surface-color);
+    padding: 15px;
+    border-radius: 8px;
+}
+#search {
+    width: calc(100% - 30px);
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    background-color: #3d003f;
+    color: var(--text-color);
+}
+#search:hover, #search:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--primary-color);
+}
+table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+    margin-top: 90px;
+}
+th, td {
+    padding: 15px;
+    text-align: left;
+}
+th {
+    background-color: var(--surface-color);
+    color: var(--primary-color);
+    cursor: pointer;
+    position: relative;
+}
+th:hover {
+    background-color: var(--hover-color);
+    color: #ffffff;
+}
+th.asc::after { content: "▲"; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 0.8em; }
+th.desc::after { content: "▼"; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 0.8em; }
+tr {
+    background-color: #3d003f;
+    transition: all 0.24s ease;
+}
+tr:hover {
+    background-color: #500050;
+}
+footer {
+    text-align: center;
+    font-size: 0.9em;
+    color: var(--text-color);
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    background-color: #1e002b;
+    padding: 10px 0;
+}
+footer a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+footer a:hover { color: #ff66ff; }
 </style>
 </head>
 <body>
 <main>
-<div class="search-container fade-in">
-<input type="text" id="search" placeholder="Search..." />
+<div class="search-container">
+<input type="text" id="search" placeholder="Search..."/>
 </div>
-<table id="entriesTable" class="fade-in">
+<table id="entriesTable">
 <thead>
 <tr>
 <th data-sort="time">Last Execution</th>
@@ -189,8 +274,8 @@ h1 { color: var(--primary-color); text-align: center; margin-bottom: 30px; font-
 <tbody></tbody>
 </table>
 </main>
-<footer class="fade-in">
-Made by espouken
+<footer>
+Made by DCABYSSH
 <a href="https://discordapp.com/users/1149799913727721485" target="_blank">Discord</a>
 <a href="https://github.com/spokwn" target="_blank">Github</a>
 </footer>
@@ -204,12 +289,12 @@ foreach ($entry in $Bam) {
     $escapedSignature = $entry.'Digital Signature'.Replace("\", "\\")
     $escapedFileName = $entry.'File Name'.Replace("\", "\\")
     $ContenidoHtml += @"
-{
-time: "$escapedTime",
-path: "$escapedPath",
-signature: "$escapedSignature",
-fileName: "$escapedFileName"
-},
+        {
+          time: '$escapedTime',
+          path: '$escapedPath',
+          signature: '$escapedSignature',
+          fileName: '$escapedFileName'
+        },
 "@
 }
 
@@ -217,59 +302,44 @@ $ContenidoHtml += @'
 ];
 
 let currentSort = { column: "time", direction: "asc" };
+
 function populateTable(data) {
-  const tbody = document.querySelector("#entriesTable tbody");
-  tbody.innerHTML = "";
-  data.forEach((entry, index) => {
-    const row = document.createElement("tr");
-    row.className = "fade-in";
-    row.style.animationDelay = `${index * 0.1}s`;
-    row.innerHTML = `
-<td>${entry.time}</td>
-<td>${entry.path}</td>
-<td>${entry.signature}</td>
-<td>${entry.fileName}</td>
-`;
-    tbody.appendChild(row);
-  });
+    const tbody = document.querySelector("#entriesTable tbody");
+    tbody.innerHTML = "";
+    data.forEach((entry,index)=>{
+        const row=document.createElement("tr");
+        row.innerHTML=`<td>${entry.time}</td><td>${entry.path}</td><td>${entry.signature}</td><td>${entry.fileName}</td>`;
+        tbody.appendChild(row);
+    });
 }
+
 function applyFilters() {
-  let filteredEntries = [...entries];
-  const searchTerm = document.getElementById("search").value.toLowerCase();
-  filteredEntries = filteredEntries.filter((entry) =>
-    Object.values(entry).some((value) =>
-      value.toLowerCase().includes(searchTerm)
-    )
-  );
-  filteredEntries.sort((a, b) => {
-    const aValue = a[currentSort.column];
-    const bValue = b[currentSort.column];
-    if (currentSort.direction === "asc") { return aValue.localeCompare(bValue); } 
-    else { return bValue.localeCompare(aValue); }
-  });
-  populateTable(filteredEntries);
-  updateSortIndicators();
+    let filteredEntries=[...entries];
+    const searchTerm=document.getElementById("search").value.toLowerCase();
+    filteredEntries=filteredEntries.filter(entry=>Object.values(entry).some(value=>value.toLowerCase().includes(searchTerm)));
+    filteredEntries.sort((a,b)=>{
+        const aValue=a[currentSort.column];
+        const bValue=b[currentSort.column];
+        if(currentSort.direction==="asc"){return aValue.localeCompare(bValue);} else {return bValue.localeCompare(aValue);}
+    });
+    populateTable(filteredEntries);
+    updateSortIndicators();
 }
+
 function updateSortIndicators() {
-  document.querySelectorAll("th").forEach((th) => {
-    th.classList.remove("asc", "desc");
-    if (th.dataset.sort === currentSort.column) {
-      th.classList.add(currentSort.direction);
-    }
-  });
+    document.querySelectorAll("th").forEach(th=>{
+        th.classList.remove("asc","desc");
+        if(th.dataset.sort===currentSort.column){th.classList.add(currentSort.direction);}
+    });
 }
-document.getElementById("search").addEventListener("input", applyFilters);
-document.querySelectorAll("th[data-sort]").forEach((th) => {
-  th.addEventListener("click", () => {
-    const column = th.dataset.sort;
-    if (currentSort.column === column) {
-      currentSort.direction = currentSort.direction === "asc" ? "desc" : "asc";
-    } else {
-      currentSort.column = column;
-      currentSort.direction = "asc";
-    }
-    applyFilters();
-  });
+
+document.getElementById("search").addEventListener("input",applyFilters);
+document.querySelectorAll("th[data-sort]").forEach(th=>{
+    th.addEventListener("click",()=>{
+        const column=th.dataset.sort;
+        if(currentSort.column===column){currentSort.direction=currentSort.direction==="asc"?"desc":"asc";} else {currentSort.column=column;currentSort.direction="asc";}
+        applyFilters();
+    });
 });
 applyFilters();
 </script>
@@ -279,5 +349,4 @@ applyFilters();
 
 $htmlFilePath = Join-Path $env:TEMP "BAMKeyEntries.html"
 $ContenidoHtml | Out-File -FilePath $htmlFilePath -Encoding UTF8
-
 Start-Process $htmlFilePath
